@@ -1,1 +1,2 @@
-# ukrainian-gec
+# Ukrainian GEC
+## LSTM ENCODER - DECODER
