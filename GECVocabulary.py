@@ -1,9 +1,7 @@
-
-
 # Declaring source and target files (containing error sentences and corrected ones) for training and validation
 SRC_TRAIN = "./gec-data/train.src.txt"
 TGT_TRAIN = "./gec-data/train.tgt.txt"
-SRC_VALIDATE = "./gec-data/valid.tgt.txt"
+SRC_VALIDATE = "./gec-data/valid.src.txt"
 TGT_VALIDATE = "./gec-data/valid.tgt.txt"
 
 def load_sentences(filepath):
@@ -21,7 +19,7 @@ def load_sentences(filepath):
                 sentences.append(clean_line)
     return sentences
 
-class Vocabulary:
+class GECVocabulary:
     '''
      This is the Vocabulary class for building the character-based vocabulary.
      It includes special tokens for LSTM, namely:
@@ -121,7 +119,7 @@ class Vocabulary:
 src_train = load_sentences(SRC_TRAIN)
 tgt_train = load_sentences(TGT_TRAIN)
 
-vocab = Vocabulary()
+vocab = GECVocabulary()
 vocab.build_vocabulary(src_train, tgt_train)
 
 # --------------------------------------------------------------------------------------
@@ -135,8 +133,4 @@ decoded = vocab.decode(encoder_input)
 print("Encoder input indices:", encoder_input)
 print("Decoder input indices:", decoder_input)
 print("Decoder target indices:", decoder_target)
-
 print("Sentence decoded?", test_sentence == decoded)
-# End of testing
-# ----------------------------------------------------------------------------------------
-
