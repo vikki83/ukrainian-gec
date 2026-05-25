@@ -2,7 +2,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
-
 class GECDataset(Dataset):
     '''
     This PyTorch Dataset stores sentence pairs and returns the encoded source
@@ -65,3 +64,58 @@ class GECDataset(Dataset):
             self.decoder_targets[index],
         )
 
+    def collate_fn(self, batch):
+        '''
+        This method is called by DataLoader to combine many samples
+        into one batch. Each batch consists of a 3-tuple (encoder_input, decoder_input, decoder_target)
+        coming from __getitem__.
+        <PAD> tokens are added to sentences (to fit the longest sentence) so that each batch
+         has a tensor of the same length.
+        '''
+        # PAD index from the saved vocabulary
+        pad_index = self.vocab.character_to_index[self.vocab.PAD_TOKEN]
+
+        # Split the batch into three separate lists.
+        # The batch before splitting looks like this: [(enc_1, dec_in_1, dec_tgt_1), (enc_2, dec_in_2, dec_tgt_2), ...]
+
+        encoder_inputs = []
+        decoder_inputs = []
+        decoder_targets = []
+        for enc_in, dec_in, dec_tgt in batch:
+            encoder_inputs.append(enc_in)
+            decoder_inputs.append(dec_in)
+            decoder_targets.append(dec_tgt)
+
+        # Stores the length of each sequence
+        lengths_list = []
+        # This for-loop saves number of tokens of each sequence (before padding) to the list
+        for seq in encoder_inputs:
+            length = len(seq)
+            lengths_list.append(length)
+        # Converting the list of integers into a tensor
+        encoder_lengths = torch.tensor(lengths_list, dtype=torch.long)
+
+        # pad_sequence makes sure all tensors have the same length as the longest sentence
+        encoder_inputs_padded  = pad_sequence(
+            encoder_inputs,
+            batch_first=True, # The output shape (batch_size, sequence_length)
+            padding_value=pad_index # Uses the PAD index from the saved vocabulary
+        )
+        decoder_inputs_padded  = pad_sequence(
+            decoder_inputs,
+            batch_first=True,
+            padding_value=pad_index
+        )
+        decoder_targets_padded = pad_sequence(
+            decoder_targets,
+            batch_first=True,
+            padding_value=pad_index
+        )
+
+        # Will be used in the training loop
+        return (
+            encoder_inputs_padded, #  (batch_size, max_src_len) to GECEncoder
+            encoder_lengths,  # (batch_size,) for pack_padded_sequence
+            decoder_inputs_padded, # (batch_size, max_tgt_len) to GECDecode
+            decoder_targets_padded, # (batch_size, max_tgt_len) for loss
+        )
