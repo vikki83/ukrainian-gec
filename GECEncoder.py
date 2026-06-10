@@ -5,8 +5,12 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class GECEncoder(nn.Module):
     """
-    Bidirectional LSTM Encoder that reads each character at a time
-    in both direction and saves context.
+    Bidirectional LSTM Encoder that reads a sentence one character at a time
+    in both directions, saves context and hands it to the Decoder.
+
+     forward() returns three things:
+      - encoder_outputs: the reading at every character (for attention later)
+      - hidden, cell: a short summary of the whole sentence, resized for the Decoder
     """
 
     def __init__(
@@ -80,3 +84,58 @@ class GECEncoder(nn.Module):
         self.hidden_projection = nn.Linear(2 * hidden_dim, hidden_dim)
         self.cell_projection   = nn.Linear(2 * hidden_dim, hidden_dim)
 
+    def forward(self, encoder_inputs, encoder_lengths):
+        '''
+        Runs once per batch.
+
+        encoder_inputs  - a batch of sentences as character IDs.
+        encoder_lengths - real length of each sentence before padding.
+        '''
+
+        # 1) Turning Character IDs into vectors (learnt numbers)
+        # Every single character is now a vector instead of one number
+        # Shape (batch, max_src_len) -> (batch, max_src_len, embedding_dim)
+        embedded = self.embedding(encoder_inputs)
+        embedded = self.embedding_dropout(embedded) # prevents overfitting
+
+        # 2) Skipping the padding
+        packed = pack_padded_sequence(
+            embedded,
+            lengths=encoder_lengths.cpu(),
+            batch_first=True,
+            enforce_sorted=False, # PyTorch sorts sentences on its own
+        )
+
+        # 3) Run the BiLSTM, one output vector per character
+        # Two outputs:
+        #   - packed_outputs - the reading at every character
+        #   - final_hidden - the memory after each sentence ends
+        # The memory has shape (2 * num_layers, batch, hidden_dim), the rows switch
+        # their direction: forward, backward, forward,..... per layer
+        packed_outputs, (final_hidden, final_cell) = self.lstm(packed)
+
+        # 4)  Back to a normal tensor (batch, max_src_len, 2 * hidden_dim)
+        encoder_outputs, _ = pad_packed_sequence(
+            packed_outputs, batch_first=True
+        )
+
+        # 5) Two directions into one memory
+        # [0::2] - every forward row
+        # [1::2] - every backward row.
+        # Each is (num_layers, batch, hidden_dim)
+        forward_hidden  = final_hidden[0::2]
+        backward_hidden = final_hidden[1::2]
+        forward_cell    = final_cell[0::2]
+        backward_cell   = final_cell[1::2]
+
+        # Two separate memories joined together per layer
+        # Now (num_layers, batch, 2 * hidden_dim).
+        hidden_concat = torch.cat([forward_hidden, backward_hidden], dim=2)
+        cell_concat   = torch.cat([forward_cell,   backward_cell],   dim=2)
+
+        # Changing the size for the Decoder
+        # tanh keeps the values within -1 and 1
+        hidden = torch.tanh(self.hidden_projection(hidden_concat))
+        cell   = torch.tanh(self.cell_projection(cell_concat))
+
+        return encoder_outputs, hidden, cell
