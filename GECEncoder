@@ -1,0 +1,42 @@
+import torch
+import torch.nn as nn
+
+
+class GECEncoder(nn.Module):
+    """
+    Bidirectional LSTM Encoder that reads each character at a time
+    in both direction (=> bidirectional) and saves context.
+    """
+
+    def __init__(
+        self,
+        vocab_size,
+        embedding_dim,
+        hidden_dim,
+        num_layers,
+        pad_index,
+        dropout=0.0,
+    ):
+        super().__init__()
+
+        # Embedding layer 
+        self.embedding = nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=embedding_dim,
+            padding_idx=pad_index,
+        )
+
+        # Dropout on the embedding output. 
+        self.embedding_dropout = nn.Dropout(dropout)
+
+        # Bidirectional LSTM 
+        self.lstm = nn.LSTM(
+            input_size=embedding_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+        )
+
+  
