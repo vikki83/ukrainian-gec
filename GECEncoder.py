@@ -5,12 +5,12 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class GECEncoder(nn.Module):
     """
-    Bidirectional LSTM Encoder that reads a sentence one character at a time
-    in both directions, saves context and hands it to the Decoder.
+    Bidirectional LSTM encoder that reads a sentence one character at a time
+    in both directions, saves context and hands it to the decoder.
 
      forward() returns three things:
       - encoder_outputs: the reading at every character (for attention later)
-      - hidden, cell: a short summary of the whole sentence, resized for the Decoder
+      - hidden, cell: a short summary of the whole sentence, resized for the decoder
     """
 
     def __init__(
