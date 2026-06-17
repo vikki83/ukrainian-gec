@@ -1,0 +1,216 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+\pdfoutput=1
+% In particular, the hyperref package requires pdfLaTeX in order to break URLs across lines.
+
+\documentclass[11pt]{article}
+
+% Remove the "review" option to generate the final version.
+%\usepackage[review]{acl}
+\usepackage{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{enumitem}
+
+
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+
+% T2A is for cyryllic
+\usepackage[T2A, T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+\usepackage[ukrainian,english]{babel}
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+
+% custom style files (not part of the ACL template):
+\usepackage{todonotes}
+\usepackage{tikz, tikz-qtree} % for drawing graphs
+\usepackage{tikz-dependency}
+\usepackage{linguex}
+
+%% custom style definitions:
+%% This is how you can define your own commands:
+
+%% hide takes one argument and the last bracket defines its output, which is nothing
+%% For application you write: \hide{some text here, which will not be shown}
+\newcommand{\hide}[1]{}
+
+%% \prule is a command for writing parsing rules. It has three arguments, all of them in math mode: the antecedent, the consequent and the side condition(s)
+%% \prule can be used in normal text mode, not math mode.
+\newcommand{\prule}[3]{
+	$\begin{array}{c} #1\\ \hline
+	#2\end{array} ~~ {\scriptsize #3}$}
+
+
+\title{Character-Based Sequence-to-Sequence Modelling for Ukrainian Grammatical Error Correction}
+
+% Author information can be set in various styles:
+% For several authors from the same institution:
+% \author{Author 1 \and ... \and Author n \\
+%         Address line \\ ... \\ Address line}
+% if the names do not fit well on one line use
+%         Author 1 \\ {\bf Author 2} \\ ... \\ {\bf Author n} \\
+% For authors from different institutions:
+% \author{Author 1 \\ Address line \\  ... \\ Address line
+%         \And  ... \And
+%         Author n \\ Address line \\ ... \\ Address line}
+% To start a seperate ``row'' of authors use \AND, as in
+% \author{Author 1 \\ Address line \\  ... \\ Address line
+%         \AND
+%         Author 2 \\ Address line \\ ... \\ Address line \And
+%         Author 3 \\ Address line \\ ... \\ Address line}
+
+\author{Viktoriia Tsosenko \\
+Heinrich Heine University D\"usseldorf \\
+  \texttt{Viktoriia.Tsosenko@hhu.de} \\}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+Grammatical error correction (GEC) has been studied successfully for English but remains a challenging task for morphologically complex languages such as Ukrainian. In this work, we present a character-level sequence-to-sequence model based on a bidirectional LSTM encoder and an LSTM decoder for Ukrainian GEC. We train and evaluate our model on the manually annotated UA-GEC dataset, consisting of 33,735 sentences and covering grammatical, spelling, punctuation, and fluency errors. We then use a fine-tuned mBART50 baseline and compare it against our model. 
+
+\end{abstract}
+
+
+\section{Introduction}
+Grammatical Error Correction (GEC) in Natural Language Processing (NLP) performs automatic error detection and correction in written texts. The main error types are \citep {bryant-etal-2017-automatic}:
+\begin{enumerate}[label=(\alph*)]
+\item orphographic (spelling and punctuation),
+\item morphological (word ending or forms), 
+\item syntactic (word order or missing words), 
+\item lexical errors (wrong context or phrasing). 
+\end{enumerate}
+
+Interest in Ukrainian NLP has grown significantly in recent years. Despite this, Ukrainian remains a low-resource language due to the lack of annotated corpora. In this work we use the first and currently the only dataset for Ukrainian, UA-GEC.
+Because of its morphological complexity (e.g. deep system of cases, verbal aspects), Ukrainian GEC is a challenging task for token-based models. Unlike English, Ukrainian is an inflectional language. The most common errors in Ukrainian happen on the morphological level (wrong word endings and agreement) and lexical level (calques). That is why we use a character-based approach. We also compare 
+it against a fine-tuned mBART50 baseline \citep{tang-etal-2021-multilingual}, since this model achieved the best results in the UA-GEC shared task \citep{uagec-2023}.
+
+To summarize, our contributions are as follows:
+
+\begin{itemize}
+    \item  Train a character-based encoder-decoder model 
+    on UA-GEC and evaluate it with the F0.5 metric.
+    \item Compare our model against the fine-tuned mBART50.
+    \item Analyze performance based on error types and discuss the pros and cons of a character-based approach for a 
+    fusional language.
+\end{itemize}
+
+\section{Dataset}
+
+Ukrainian belongs to low-resource languages and UA-GEC is the first professionally annotated dataset for Ukrainian GEC. It consists of written texts, both from native and non-native speakers, and annotated by two different annotators. 
+The annotation has the following format: \texttt{\{error=>edit:::error\_type=Tag\}},
+where \textit{error} is the original text, \textit{edit} is the correction, and \textit{Tag} denotes the error category \citep{syvokon-etal-2023-ua}.
+
+Errors in UA-GEC are divided into four types, namely grammar, fluency, spelling and punctuation. There are two corpus versions in \texttt{m2} format, namely \texttt{gec only } and \texttt{gec + fluency}. In this paper, we concentrate on the latter one. \texttt{gec + fluency} is divided into train and test sets, with 31,038 and 2,697 sentences, respectively \citep{syvokon-etal-2023-ua}.
+
+The \texttt{m2} format is standard in GEC and its structure is shown in Table ~\ref{tab:m2-example}. Line S contains a sentence and A-lines are annotations stating error location, it's type and the corresponding correction, made by two different annotators.
+
+
+\begin{table}[h]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ll}
+\hline
+\textbf{Line} & \textbf{Content} \\
+\hline
+S & She go to the store every day . \\
+A & 1 2 ||| G/Number ||| goes ||| REQUIRED ||| -NONE- ||| 0 \\
+A & 1 2 ||| G/Number ||| goes ||| REQUIRED ||| -NONE- ||| 1 \\
+\hline
+\end{tabular}}
+\caption{An example of a m2-formatted sentence.}
+\label{tab:m2-example}
+\end{table}
+To use the sentences in training, they must be parsed first. UA-GEC repo provides already  parsed sentences as source and target text files, so no additional parsing is required \citep{uagec-2023}. 
+
+
+\section{Models}
+
+\subsection{Character-Level Encoder-Decoder}
+ As the model's name suggests, it is a character-level model consisting of two parts, namely the Encoder and Decoder.
+
+\subsubsection{Character-Level Vocabulary}
+ 
+ A  character-level model is the right approach for detecting errors in fusional languages like Ukrainian, since it allows the model to recognize grammatical function of inflections. A word-level model is unsuitable for this task because it treats different inflected forms of the same word (e.g. different cases or moods) as completely different tokens, resulting in a vocabulary of thousands of words.
+
+To build the vocabulary, we used the train dataset of both source and target sentences. As a result, we received 322 distinct characters, of which only 70 are Cyrillic. Although the Ukrainian alphabet consists of 33 letters, the model treats their upper and lower case forms as separate symbols (66 in total), plus there are four Russian-only letters found in the data (\foreignlanguage{ukrainian}{Э, э, ы, ё}). The remaining characters that explain  such a high count are: 61  Latin letters, 16 digits (including superscript) and 175 other symbols such as emojis, punctuation and other signs. 
+
+Additionally, there are four special symbols we added at the beginning of the vocabulary so that the model can indicate padding (\texttt{<PAD>}), start of the sentence (\texttt{<SOS>}), end of the sentence(\texttt{<EOS>}), and any unknown symbols (\texttt{<UNK>}). The (\texttt{<UNK>}) symbol is reserved for any characters unseen during training but present in future validation and inference steps. Thus the final vocabulary for Ukrainian GEC contains 326 symbols in total.
+
+The model cannot work with those symbols directly, it requires a numerical input. Thus, every symbol receives its own numerical ID (see Table~\ref{tab:vocab-example}). Each ID is then mapped to a learned embedding vector required by the encoder and decoder.
+\begin{table}[h]
+\centering
+\begin{tabular}{cc}
+\hline
+\textbf{Token} & \textbf{Index} \\
+\hline
+\texttt{<PAD>} & 0 \\
+\texttt{<SOS>} & 1 \\
+\texttt{<EOS>} & 2 \\
+\texttt{<UNK>} & 3 \\
+\hline
+\foreignlanguage{ukrainian}{`а'} & 4 \\
+\foreignlanguage{ukrainian}{`б'} & 5 \\
+\foreignlanguage{ukrainian}{`в'} & 6 \\
+$\vdots$ & $\vdots$ \\
+\hline
+\end{tabular}
+\caption{Token-to-index mapping. Indices 0--3 are reserved for special tokens; character indices begin at 4.}
+\label{tab:vocab-example}
+\end{table}
+
+
+\subsubsection{Encoder}
+
+ The encoder reads erroneous Ukrainian sentences, one character at a time and converts each character into a vector. Each character ID first attaches to a learned embedding vector through an embedding layer. Next, the embeddings are processed by  \emph{a single-layer bidirectional LSTM}, meaning it reads each sentence in both directions, left-to-right and right-to-left. This lets the model understand each character better, based not only on the context before the character, but also on what follows. For Ukrainian it plays an important role, since agreement and case endings often rely on the words that come after. There are two outputs that the encoder produces: a reading of every character (for attention mechanism, not used in this paper), and a context vector. 
+ 
+ Forward and backward readings form two hidden states that are concatened into one. Similarly within the cell states, their directions get concatenated and become one cell state. After concatenation the size of both states needs to be reduced to the decoder's expected size. By applying two separate  \emph{linear projections}, followed by a  \emph{tanh activation}, we receive the decoder's starting point.
+
+
+\subsubsection{Decoder}
+The decoder's task is to write correct sentences. When it receives the encoder's summary, it starts predicting correct letters, one character at a time, left-to-right. By reading the special tokens \texttt{<SOS>} and \texttt{<EOS>} the decoder knows when the sentence begins and ends. 
+
+During training the decoder makes predictions, but they are never fed back into the model. Instead, \emph{teacher forcing} is used, meaning the model always receives the correct previous characters. This enables a more faster training process. 
+
+The inference time is where the decoder uses its own predictions and actually demonstrates what is has learned. After training, the best model is saved and loaded again to correct new sentences at inference time. 
+
+\subsection{Fine-tuned mBART50}
+transformer based encoder-decoder pretrained on 50 languages
+
+token-level approach
+
+\section{Training}
+Hyperparameters, hardware etc.
+
+\section{Results}
+Table of comparison
+
+
+\nocite{*}
+\bibliographystyle{acl_natbib}
+\bibliography{anthology}
+
+
+\end{document}
