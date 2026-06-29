@@ -22,16 +22,32 @@ class GECSeq2Seq(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
+    @staticmethod
+    def _make_mask(encoder_lengths, max_len, device):
+        """
+        Build the source padding mask the attention needs.
+
+        True where there is a real character, False where the position is <PAD>.
+        encoder_lengths counts src + <EOS>, which is exactly the number of valid
+        time steps in encoder_outputs.
+        """
+        lengths = encoder_lengths.to(device)
+        positions = torch.arange(max_len, device=device)
+        return positions.unsqueeze(0) < lengths.unsqueeze(1)
+
     def forward(self, encoder_inputs, encoder_lengths, decoder_inputs):
         """
         Teacher-forcing forward pass. Returns next-char logits for every
         position of the target sequence.
         """
-        # Encode the source. We only need the final hidden/cell here
-        _, hidden, cell = self.encoder(encoder_inputs, encoder_lengths)
+        # Encode the source. With attention we keep encoder_outputs (one vector per source character)
+        encoder_outputs, hidden, cell = self.encoder(encoder_inputs, encoder_lengths)
 
-        # 2) Decode using the encoder's final state
-        logits, _, _ = self.decoder(decoder_inputs, hidden, cell)
+        # Mask <PAD> positions
+        mask = self._make_mask(encoder_lengths, encoder_outputs.size(1), encoder_outputs.device)
+
+        # Decode with encoder's final state + attention
+        logits, _, _ = self.decoder(decoder_inputs, hidden, cell, encoder_outputs, mask)
 
         return logits
 
@@ -40,8 +56,8 @@ class GECSeq2Seq(nn.Module):
         """
         Greedy decoding: given ONE source sentence, produce a corrected version, one char at a time.
 
-        It is different from forward() since there is no target sequence at inference;
-         we have to feed each prediction back in as the next decoder input.
+        It is different from forward() since there is no target sequence at inference; the decoder uses its own guesses
+        by feeding them back in as the next decoder input.
         """
         self.eval()
 
@@ -50,26 +66,33 @@ class GECSeq2Seq(nn.Module):
         SOS = vocab.character_to_index[vocab.SOS_TOKEN]
         EOS = vocab.character_to_index[vocab.EOS_TOKEN]
 
-        # Encode the source
-        # 1-sample batch shape: (1, src_len + 1) with EOS appended
+        # Encode the source (turning raw input sentence into the numeric tensor)
+        # 1-sample batch shape: (1, src_len + 1), where +1 is <EOS>
+        # shape = size of each dimension
         src_ids = vocab.encode(source_sentence, add_sos=False, add_eos=True)
         encoder_inputs  = torch.tensor([src_ids], dtype=torch.long, device=device)
-        encoder_lengths = torch.tensor([len(src_ids)], dtype=torch.long)
+        encoder_lengths = torch.tensor([len(src_ids)], dtype=torch.long) # real length
 
-        _, hidden, cell = self.encoder(encoder_inputs, encoder_lengths)
+        encoder_outputs, hidden, cell = self.encoder(encoder_inputs, encoder_lengths)
 
-        # Decoder loop, one step at a time
+        # There is no padding because we decode one sentence at a time. But the decoder still expects a mask argument
+        mask = self._make_mask(encoder_lengths, encoder_outputs.size(1), encoder_outputs.device)
+
+        # Preventing an infinite loop if the sentence never reaches <EOS>
         if max_length is None:
             max_length = len(src_ids) * 2
 
-        next_input = torch.tensor([[SOS]], dtype=torch.long, device=device)
+        next_input = torch.tensor([[SOS]], dtype=torch.long, device=device) # starts with <SOS>
         output_ids = []
         for _ in range(max_length):
-            # logits shape: (1, 1, vocab_size) — one step, one batch element.
-            logits, hidden, cell = self.decoder(next_input, hidden, cell)
-            next_id = logits.argmax(dim=-1)  # (1, 1)
+            # logits (a score vector, shows how likely it is for each character to come next)
+            # After the decoder runs one step, logits has shape (1, 1, vocab_size):
+            #   where 1 is batch (one sentence) and one character position,
+            #   vocab_size is one raw score for every character in vocabulary
+            logits, hidden, cell = self.decoder(next_input, hidden, cell, encoder_outputs, mask)
+            next_id = logits.argmax(dim=-1)  # greedy decoding - takes the single best character at each step
 
-            # Stop as soon as the model emits EOS
+            # Stop as soon as EOS comes
             if next_id.item() == EOS:
                 break
 
@@ -77,5 +100,5 @@ class GECSeq2Seq(nn.Module):
             # Feed the prediction back in as the next decoder input
             next_input = next_id
 
-        # vocab.decode skips PAD/SOS/EOS/UNK, so the result is clean text
+        # vocab.decode skips special tokens to have a clean text
         return vocab.decode(output_ids)
