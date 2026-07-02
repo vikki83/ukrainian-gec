@@ -1,2 +1,17 @@
+# Core deep-learning stack (LSTM seq2seq + mBART-50 fine-tuning)
+# NOTE: torch 2.7.0 was installed as the CUDA 11.8 build (2.7.0+cu118). Plain
+# `pip install torch==2.7.0` gives the CPU build; for the GPU wheel install with:
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu118
 torch==2.7.0
-numpy
+numpy==1.26.4
+
+# mBART-50 fine-tuning (finetune_mbart.py / inference_mbart.py)
+transformers==4.57.0
+sentencepiece==0.2.1   # mBART SentencePiece tokenizer
+sacremoses==0.1.1      # required by the mBART tokenizer
+accelerate==1.14.0     # backs the HuggingFace Seq2SeqTrainer
+
+# Evaluation (gec-data/evaluate.py + tokenizer.py)
+errant==3.0.2          # provides the errant_parallel / errant_compare CLIs
+stanza==1.12.2         # Ukrainian tokenizer
+spacy==3.8.14          # ERRANT dependency (downloads en_core_web_sm on first run)
