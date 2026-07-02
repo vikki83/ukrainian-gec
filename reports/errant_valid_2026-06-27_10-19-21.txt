@@ -1,0 +1,19 @@
+ERRANT Evaluation Report
+Date: 2026-06-27_10-19-21
+
+Hypotheses: valid.hyp.txt
+Gold (m2):  valid.m2
+Tokenized:  yes (stanza uk)
+
+
+=========== Span-Based Correction ============
+TP	FP	FN	Prec	Rec	F0.5
+444	480	1264	0.4805	0.26	0.4108
+==============================================
+
+
+============ Span-Based Detection ============
+TP	FP	FN	Prec	Rec	F0.5
+535	389	1229	0.579	0.3033	0.4899
+==============================================
+

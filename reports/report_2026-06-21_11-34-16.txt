@@ -1,0 +1,37 @@
+Training Report
+Date: 2026-06-21_11-34-16
+
+Number of epochs = 50
+Batch size = 48
+Embedding dimension = 64
+Hidden dimension = 256
+Number of layers= 1
+Learning rate= 0.001
+Patience = 5
+Length bucketing = True (bucket multiplier 50, safe full-batch len 450)
+
+Epoch | Train loss | Valid loss | Valid character accuracy
+    1 |     2.1430 |     1.3704 |         0.6121
+    2 |     0.5517 |     0.5363 |         0.8703
+    3 |     0.2673 |     0.2643 |         0.9439
+    4 |     0.2069 |     0.3161 |         0.9285
+    5 |     0.1794 |     0.2019 |         0.9570
+    6 |     0.1754 |     0.2013 |         0.9571
+    7 |     0.1549 |     0.2030 |         0.9557
+    8 |     0.1485 |     0.2020 |         0.9560
+    9 |     0.1414 |     0.1846 |         0.9609
+   10 |     0.1348 |     0.1990 |         0.9563
+   11 |     0.1330 |     0.1779 |         0.9623
+   12 |     0.1189 |     0.1914 |         0.9583
+   13 |     0.1139 |     0.1727 |         0.9634
+   14 |     0.1013 |     0.1838 |         0.9602
+   15 |     0.1031 |     0.1994 |         0.9574
+   16 |     0.0963 |     0.1643 |         0.9654
+   17 |     0.0904 |     0.1733 |         0.9638
+   18 |     0.0886 |     0.1649 |         0.9658
+   19 |     0.0849 |     0.1755 |         0.9637
+   20 |     0.0762 |     0.1842 |         0.9612
+   21 |     0.0716 |     0.2404 |         0.9465
+
+Early stopping at epoch 21: no improvement for 5 epochs (best was epoch 16, valid loss 0.1643).
+Best model: epoch 16 (valid loss 0.1643).

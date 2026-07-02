@@ -1,0 +1,12 @@
+mBART-50 Fine-tuning Report
+Date: 2026-06-29_18-00-30
+Epochs requested: 3
+
+ epoch    train_loss     eval_loss
+     0        7.6490           nan
+     1        1.8077        0.2242
+     2        1.0812        0.2024
+     3        0.8056        0.2091
+
+Best (lowest) eval_loss: 0.2024 at epoch 2
+Eval loss bottomed out before the final epoch -> later epochs added no validation gain (likely starting to overfit). ~2 epochs is enough for this data/config.
