@@ -12,6 +12,7 @@
 \usepackage{times}
 \usepackage{latexsym}
 \usepackage{enumitem}
+\usepackage{amsmath}
 
 
 
@@ -103,9 +104,8 @@ Grammatical Error Correction (GEC) in Natural Language Processing (NLP) performs
 \item lexical errors (wrong context or phrasing). 
 \end{enumerate}
 
-Interest in Ukrainian NLP has grown significantly in recent years. Despite this, Ukrainian remains a low-resource language due to the lack of annotated corpora. In this work we use the first and currently the only dataset for Ukrainian, UA-GEC.
-Because of its morphological complexity (e.g. deep system of cases, verbal aspects), Ukrainian GEC is a challenging task for token-based models. Unlike English, Ukrainian is an inflectional language. The most common errors in Ukrainian happen on the morphological level (wrong word endings and agreement) and lexical level (calques). That is why we use a character-based approach. We also compare 
-it against a fine-tuned mBART50 baseline \citep{tang-etal-2021-multilingual}, since this model achieved the best results in the UA-GEC shared task \citep{uagec-2023}.
+Interest in Ukrainian NLP has grown significantly in recent years. Despite this, Ukrainian remains a low-resource language due to the lack of annotated corpora \citep {pogorilyy-kramov-2020-method}. In this work we use the first and currently the only dataset for Ukrainian, UA-GEC.
+Because of its morphological complexity (e.g. deep system of cases, verbal aspects), Ukrainian GEC is a challenging task for token-based models \citep{syvokon-etal-2023-ua}. Unlike English, Ukrainian is an inflectional language. The most common errors in Ukrainian happen on the morphological level (wrong word endings and agreement) \citep {zuban-2017-automatic} and lexical level (calques). Plenty of Ukrainians are native speakers in both Ukrainian and Russian, which arises from a complex historical and political background. A widespread phenomenon in Ukraine is code-switching between the two languages, referred to as  \textit{syrzhyk}. It occurs across multiple linguistic levels blending vocabulary, grammar, and pronunciation from both Ukrainian and Russian \citep{hentschel2020ukrainisch}. Due to such complexity, we use a character-based approach in our paper. We also compare the model against a fine-tuned mBART50 baseline \citep{tang-etal-2021-multilingual}, since this model achieved the best results in the UA-GEC shared task \citep{uagec-2023}.
 
 To summarize, our contributions are as follows:
 
@@ -149,11 +149,12 @@ To use the sentences in training, they must be parsed first. UA-GEC repo provide
 \section{Models}
 
 \subsection{Character-Level Encoder-Decoder}
- As the model's name suggests, it is a character-level model consisting of two parts, namely the Encoder and Decoder.
+ As the model's name suggests, it is a character-level model consisting of two parts, namely the Encoder and Decoder. 
 
 \subsubsection{Character-Level Vocabulary}
- 
- A  character-level model is the right approach for detecting errors in fusional languages like Ukrainian, since it allows the model to recognize grammatical function of inflections. A word-level model is unsuitable for this task because it treats different inflected forms of the same word (e.g. different cases or moods) as completely different tokens, resulting in a vocabulary of thousands of words.
+There are several approaches to text segmentation for seq2seq models: word-level, subword level (e.g. BPE or WordPiece), and character-level tokenization. A word-level model treats different inflected forms of the same word (e.g. different cases or moods) as completely different tokens, which is problematic for fusional languages as Ukrainian \citep{syvokon-etal-2023-ua}. BPE merges character sequences from the training data based on how often they appear together into single tokens. As a result, a model may end up cutting the Ukrainian word in the wrong place and thus deviate a morpheme boundaries \citep{asgari2025morphbpe}.
+Character-level models are more reliable at capturing the structure of morphologically rich languages than BPE, and can outperform subword segmentation entirely \cite{shapiro-duh-2018-bpe}. They allow the model to recognize grammatical function of inflections and are better with orthographic errors \citep{xie-etal-2016-neural}. Given these considerations, we adopt a character-level approach for a fusional language like Ukrainian.
+
 
 To build the vocabulary, we used the train dataset of both source and target sentences. As a result, we received 322 distinct characters, of which only 70 are Cyrillic. Although the Ukrainian alphabet consists of 33 letters, the model treats their upper and lower case forms as separate symbols (66 in total), plus there are four Russian-only letters found in the data (\foreignlanguage{ukrainian}{Э, э, ы, ё}). The remaining characters that explain  such a high count are: 61  Latin letters, 16 digits (including superscript) and 175 other symbols such as emojis, punctuation and other signs. 
 
@@ -184,28 +185,91 @@ $\vdots$ & $\vdots$ \\
 
 \subsubsection{Encoder}
 
- The encoder reads erroneous Ukrainian sentences, one character at a time and converts each character into a vector. Each character ID first attaches to a learned embedding vector through an embedding layer. Next, the embeddings are processed by  \emph{a single-layer bidirectional LSTM}, meaning it reads each sentence in both directions, left-to-right and right-to-left. This lets the model understand each character better, based not only on the context before the character, but also on what follows. For Ukrainian it plays an important role, since agreement and case endings often rely on the words that come after. There are two outputs that the encoder produces: a reading of every character (for attention mechanism, not used in this paper), and a context vector. 
+ The encoder reads erroneous Ukrainian sentences, one character at a time and converts each character into a vector. Each character ID first attaches to a learned embedding vector through an embedding layer. Next, the embeddings are processed by  \emph{a single-layer bidirectional LSTM}, meaning it reads each sentence in both directions, left-to-right and right-to-left. This lets the model understand each character better, based not only on the context before the character, but also on what follows. For Ukrainian it plays an important role, since agreement and case endings often rely on the words that come after. There are two outputs that the encoder produces: a reading of every character (used later by attention) and the final hidden and cell states of a fixed length (summary). 
  
- Forward and backward readings form two hidden states that are concatened into one. Similarly within the cell states, their directions get concatenated and become one cell state. After concatenation the size of both states needs to be reduced to the decoder's expected size. By applying two separate  \emph{linear projections}, followed by a  \emph{tanh activation}, we receive the decoder's starting point.
+ Forward and backward readings form two hidden states that are concatenated into one. Similarly within the cell states, their directions get concatenated and become one cell state. After concatenation the size of both states needs to be reduced to the decoder's expected size. By applying two separate  \emph{linear projections}, followed by a  \emph{tanh activation}, we receive the decoder's starting point.
+
+\subsubsection{Attention Mechanism}
+
+Without attention, the encoder must compress everything it read into a single summary vector that is handed to the decoder to generate its output. Since this vector has a fixed size, longer sentences lose some information in order to fit in. Such a squeezed vector can result in the decoder's degraded accuracy \citep{bahdanau-etal-2015-neural}. To solve this problem we use Bahdanau's attention mechanism that lets the decoder look back at every encoder output directly, and weight source characters to how relevant they are at that moment. 
 
 
 \subsubsection{Decoder}
-The decoder's task is to write correct sentences. When it receives the encoder's summary, it starts predicting correct letters, one character at a time, left-to-right. By reading the special tokens \texttt{<SOS>} and \texttt{<EOS>} the decoder knows when the sentence begins and ends. 
+The decoder's task is to write correct sentences. When it receives the encoder's summary, it starts predicting correct characters, one at a time, left-to-right. By reading the special tokens \texttt{<SOS>} and \texttt{<EOS>} the decoder knows when the sentence begins and ends. Our decoder contains an attention mechanism
+and thus it is no longer limited to the encoder's summary only. With attention, it builds the context vector at every single step of the decoding process. Both the context vector and the previous character's embedding are fed into the decoder's LSTM as well as the final output projection. This allows the model to look back and notice what source characters are the most relevant at the current step. The output is generated sequentially and not all at once because the context relies on the decoder's constantly updating hidden state \citep{bahdanau-etal-2015-neural}.
 
-During training the decoder makes predictions, but they are never fed back into the model. Instead, \emph{teacher forcing} is used, meaning the model always receives the correct previous characters. This enables a more faster training process. 
+During training the decoder makes predictions (called \emph{logits}), but they are never fed back into the model. Instead, \emph{teacher forcing} is used, meaning the model always receives the correct previous characters. This enables a faster training process. 
 
 The inference time is where the decoder uses its own predictions and actually demonstrates what is has learned. After training, the best model is saved and loaded again to correct new sentences at inference time. 
 
-\subsection{Fine-tuned mBART50}
-transformer based encoder-decoder pretrained on 50 languages
+\subsubsection{Sequence-to-Sequence}
+Sequence-to-Sequence (Seq2Seq) is what actually brings the encoder and the decoder with attention mechanism to life. It is a wrapper that connects the two of them into one model and defines how the training and inference proceed. It also masks \texttt{<PAD>} tokens so that the attention mechanism ignores them.
 
-token-level approach
+\subsection{mBART50}
+mBART50 is a transformer based encoder-decoder pretrained on 50 languages, including Ukrainian. We use \texttt{mbart-large-50} that has about 610M parameters  \citep{tang-etal-2021-multilingual}. It does not rely on a character vocabulary as the character-level LSTM does, since it uses its own pretrained SentencePiece subword tokenizer \citep{liu2020multilingual}. The model has already seen plenty of Ukrainian words in pretraining, and thus, it contains representations of most Ukrainian word forms, unlike with the LSTM that starts training with zero language knowledge. By fine-tuning mBART50, the existing representations are adapted to the correction task. It is important to note, that the subword tokenization may still cut morpheme boudaries since it it only frequency-based and has no knowledge of what a morpheme actually is.
 
-\section{Training}
-Hyperparameters, hardware etc.
+
+\section{Training LSTM vs Fine-tuning mBART50}
+
+The hardware used for both training and finetuning was 16 GB RTX 4060 Ti, using
+the \texttt{gec+fluency} training split. The hyperparamenetrs are summarized in Table~\ref{tab:hyperparams}.
+
+\subsection{Training the LSTM}
+LSTM trained 21 epochs (early-stopped, best at epoch 16, valid loss 0.1643, char accuracy 0.965)
+\subsection{Fine-tuning mBART50}
+
+mBART was fine-tuned only 3 epochs (best eval loss 0.2024 at epoch 2). 
+
+
+
+For tokenization and evaluation we used the corresponding publicly available scripts from the UA-GEC git \citep{uagec-2023}.
+
+\begin{table}[h]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcc}
+\hline
+\textbf{Setting} & \textbf{LSTM} & \textbf{mBART50} \\
+\hline
+Parameters        & $\sim$4M (est.) & $\sim$610M \\
+Tokenization      & character & SentencePiece \\
+Optimizer         & Adam & AdamW \\
+Learning rate     & $1\times10^{-3}$ & $3\times10^{-5}$ \\
+Effective batch   & 48 & 32 \\
+Max length        & 800 chars & 256 tokens \\
+Precision         & fp32 & bf16 \\
+Best epoch        & 16 & 2 \\
+Decoding          & greedy & beam (5) \\
+\hline
+\end{tabular}}
+\caption{Training and fine-tuning configuration for the character-level LSTM and the fine-tuned mBART50 baseline.}
+\label{tab:hyperparams}
+\end{table}
 
 \section{Results}
-Table of comparison
+
+\begin{table}[h]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccc}
+\hline
+\textbf{Model} & \textbf{Precision} & \textbf{Recall} & \textbf{F0.5} \\
+\hline
+\multicolumn{4}{l}{\textit{Span-based correction}} \\
+LSTM (char-level) & 0.4805 & 0.2600 & 0.4108 \\
+mBART50 (fine-tuned) & 0.6997 & 0.3744 & \textbf{0.5961} \\
+\hline
+\multicolumn{4}{l}{\textit{Span-based detection}} \\
+LSTM (char-level) & 0.5790 & 0.3033 & 0.4899 \\
+mBART50 (fine-tuned) & 0.7891 & 0.4110 & \textbf{0.6665} \\
+\hline
+\end{tabular}}
+\caption{ERRANT evaluation on the UA-GEC validation set, comparing the character-level LSTM against a fine-tuned mBART50.}
+\label{tab:results}
+\end{table}
+
+The vocabularies of both models differ drastically: 326 tokens VS ~250,000 tokens in favor of mBART50). 
+
 
 
 \nocite{*}
