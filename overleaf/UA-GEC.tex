@@ -90,7 +90,7 @@ Heinrich Heine University D\"usseldorf \\
 \begin{document}
 \maketitle
 \begin{abstract}
-Grammatical error correction (GEC) has been studied successfully for English but remains a challenging task for morphologically complex languages such as Ukrainian. In this work, we present a character-level sequence-to-sequence model based on a bidirectional LSTM encoder and an LSTM decoder for Ukrainian GEC. We train and evaluate our model on the manually annotated UA-GEC dataset, consisting of 33,735 sentences and covering grammatical, spelling, punctuation, and fluency errors. We then use a fine-tuned mBART50 baseline and compare it against our model. 
+Grammatical error correction (GEC) has been studied successfully for English but remains a challenging task for morphologically complex languages such as Ukrainian. In this work, we present a character-level sequence-to-sequence model based on a bidirectional LSTM encoder and an attention-based LSTM decoder for Ukrainian GEC. We train and evaluate our model on the manually annotated UA-GEC dataset, consisting of 33,735 sentences and covering grammatical, spelling, punctuation, and fluency errors. We then use a fine-tuned mBART50 baseline and compare it against our model. 
 
 \end{abstract}
 
@@ -98,14 +98,14 @@ Grammatical error correction (GEC) has been studied successfully for English but
 \section{Introduction}
 Grammatical Error Correction (GEC) in Natural Language Processing (NLP) performs automatic error detection and correction in written texts. The main error types are \citep {bryant-etal-2017-automatic}:
 \begin{enumerate}[label=(\alph*)]
-\item orphographic (spelling and punctuation),
+\item orthographic (spelling and punctuation),
 \item morphological (word ending or forms), 
 \item syntactic (word order or missing words), 
 \item lexical errors (wrong context or phrasing). 
 \end{enumerate}
 
-Interest in Ukrainian NLP has grown significantly in recent years. Despite this, Ukrainian remains a low-resource language due to the lack of annotated corpora \citep {pogorilyy-kramov-2020-method}. In this work we use the first and currently the only dataset for Ukrainian, UA-GEC.
-Because of its morphological complexity (e.g. deep system of cases, verbal aspects), Ukrainian GEC is a challenging task for token-based models \citep{syvokon-etal-2023-ua}. Unlike English, Ukrainian is an inflectional language. The most common errors in Ukrainian happen on the morphological level (wrong word endings and agreement) \citep {zuban-2017-automatic} and lexical level (calques). Plenty of Ukrainians are native speakers in both Ukrainian and Russian, which arises from a complex historical and political background. A widespread phenomenon in Ukraine is code-switching between the two languages, referred to as  \textit{syrzhyk}. It occurs across multiple linguistic levels blending vocabulary, grammar, and pronunciation from both Ukrainian and Russian \citep{hentschel2020ukrainisch}. Due to such complexity, we use a character-based approach in our paper. We also compare the model against a fine-tuned mBART50 baseline \citep{tang-etal-2021-multilingual}, since this model achieved the best results in the UA-GEC shared task \citep{uagec-2023}.
+Interest in Ukrainian NLP has grown significantly in recent years. Despite this, Ukrainian remains a low-resource language due to the lack of annotated corpora \citep {pogorilyy-kramov-2020-method}. In this work we use the first and currently the only dataset for Ukrainian, UA-GEC \citep{syvokon-etal-2023-ua}.
+Because of its morphological complexity (e.g. deep system of cases, verbal aspects), Ukrainian GEC is a challenging task for token-based models \citep{bondarenko-etal-2023-comparative}. Unlike English, Ukrainian is an inflectional language. The most common errors in Ukrainian happen on the morphological level (wrong word endings and agreement) and lexical level (calques). Plenty of Ukrainians are native speakers in both Ukrainian and Russian, which arises from a complex historical and political background. A widespread phenomenon in Ukraine is code-switching between the two languages, referred to as  \textit{surzhyk}. It occurs across multiple linguistic levels blending vocabulary, grammar, and pronunciation from both Ukrainian and Russian \citep{hentschel2020ukrainisch}. Due to such complexity, we use a character-based approach in our paper. We also compare the model against a fine-tuned mBART50 baseline \citep{tang-etal-2021-multilingual}, since this model achieved the best results in the UA-GEC shared task \citep{uagec-2023}.
 
 To summarize, our contributions are as follows:
 
@@ -125,7 +125,7 @@ where \textit{error} is the original text, \textit{edit} is the correction, and 
 
 Errors in UA-GEC are divided into four types, namely grammar, fluency, spelling and punctuation. There are two corpus versions in \texttt{m2} format, namely \texttt{gec only } and \texttt{gec + fluency}. In this paper, we concentrate on the latter one. \texttt{gec + fluency} is divided into train and test sets, with 31,038 and 2,697 sentences, respectively \citep{syvokon-etal-2023-ua}.
 
-The \texttt{m2} format is standard in GEC and its structure is shown in Table ~\ref{tab:m2-example}. Line S contains a sentence and A-lines are annotations stating error location, it's type and the corresponding correction, made by two different annotators.
+The \texttt{m2} format is standard in GEC and its structure is shown in Table ~\ref{tab:m2-example}. Line S contains a sentence and A-lines are annotations stating error location, its type and the corresponding correction, made by two different annotators.
 
 
 \begin{table}[h]
@@ -152,7 +152,7 @@ To use the sentences in training, they must be parsed first. UA-GEC repo provide
  As the model's name suggests, it is a character-level model consisting of two parts, namely the Encoder and Decoder. 
 
 \subsubsection{Character-Level Vocabulary}
-There are several approaches to text segmentation for seq2seq models: word-level, subword level (e.g. BPE or WordPiece), and character-level tokenization. A word-level model treats different inflected forms of the same word (e.g. different cases or moods) as completely different tokens, which is problematic for fusional languages as Ukrainian \citep{syvokon-etal-2023-ua}. BPE merges character sequences from the training data based on how often they appear together into single tokens. As a result, a model may end up cutting the Ukrainian word in the wrong place and thus deviate a morpheme boundaries \citep{asgari2025morphbpe}.
+There are several approaches to text segmentation for seq2seq models: word-level, subword level (e.g. BPE or WordPiece), and character-level tokenization. A word-level model treats different inflected forms of the same word (e.g. different cases or moods) as completely different tokens, which is problematic for fusional languages as Ukrainian \citep{syvokon-etal-2023-ua}. BPE merges character sequences from the training data based on how often they appear together into single tokens. As a result, a model may end up cutting the Ukrainian word in the wrong place and thus deviate from morpheme boundaries \citep{bostrom-durrett-2020-byte}.
 Character-level models are more reliable at capturing the structure of morphologically rich languages than BPE, and can outperform subword segmentation entirely \cite{shapiro-duh-2018-bpe}. They allow the model to recognize grammatical function of inflections and are better with orthographic errors \citep{xie-etal-2016-neural}. Given these considerations, we adopt a character-level approach for a fusional language like Ukrainian.
 
 
@@ -200,29 +200,24 @@ and thus it is no longer limited to the encoder's summary only. With attention, 
 
 During training the decoder makes predictions (called \emph{logits}), but they are never fed back into the model. Instead, \emph{teacher forcing} is used, meaning the model always receives the correct previous characters. This enables a faster training process. 
 
-The inference time is where the decoder uses its own predictions and actually demonstrates what is has learned. After training, the best model is saved and loaded again to correct new sentences at inference time. 
+The inference time is where the decoder uses its own predictions and actually demonstrates what it has learned. After training, the best model is saved and loaded again to correct new sentences at inference time. 
 
 \subsubsection{Sequence-to-Sequence}
 Sequence-to-Sequence (Seq2Seq) is what actually brings the encoder and the decoder with attention mechanism to life. It is a wrapper that connects the two of them into one model and defines how the training and inference proceed. It also masks \texttt{<PAD>} tokens so that the attention mechanism ignores them.
 
 \subsection{mBART50}
-mBART50 is a transformer based encoder-decoder pretrained on 50 languages, including Ukrainian. We use \texttt{mbart-large-50} that has about 610M parameters  \citep{tang-etal-2021-multilingual}. It does not rely on a character vocabulary as the character-level LSTM does, since it uses its own pretrained SentencePiece subword tokenizer \citep{liu2020multilingual}. The model has already seen plenty of Ukrainian words in pretraining, and thus, it contains representations of most Ukrainian word forms, unlike with the LSTM that starts training with zero language knowledge. By fine-tuning mBART50, the existing representations are adapted to the correction task. It is important to note, that the subword tokenization may still cut morpheme boudaries since it it only frequency-based and has no knowledge of what a morpheme actually is.
+mBART50 is a transformer-based encoder-decoder pretrained on 50 languages, including Ukrainian. Since this model achieved the best results on the UA-GEC shared task \citep{syvokon-romanyshyn-2023-unlp}, we use it as our baseline. We fine-tune \texttt{mbart-large-50} that has about 610M parameters. Pre-trained as a denoising autoencoder, mBART50 learned how to reconstruct the original, clean text from noisy input \citep{tang-etal-2021-multilingual}. This resembles the GEC task where an error can be viewed as noise and by denoising erroneous sentences we receive the correct ones. In our case, we perform monolingual translation. Since mBART50 was created for translation tasks across multiple languages \citep{tang-etal-2021-multilingual}, we force the model at every generation step to use Ukrainian as the first token for output. Otherwise it could use any of the 50 languages it knows.
 
+ 
+Unlike the character-level LSTM, mBART50 does not rely on a character vocabulary, since it uses its own pretrained SentencePiece subword tokenizer \citep{kudo-richardson-2018-sentencepiece}. The model has already seen plenty of Ukrainian words in pretraining, and thus, it contains representations of most Ukrainian word forms, unlike with the LSTM that starts training with zero language knowledge. By fine-tuning mBART50, the existing representations are adapted to the correction task. It is important to note that the subword tokenization may still cut morpheme boundaries since it is only frequency-based and has no knowledge of what a morpheme actually is. 
+
+
+ 
 
 \section{Training LSTM vs Fine-tuning mBART50}
 
-The hardware used for both training and finetuning was 16 GB RTX 4060 Ti, using
-the \texttt{gec+fluency} training split. The hyperparamenetrs are summarized in Table~\ref{tab:hyperparams}.
-
-\subsection{Training the LSTM}
-LSTM trained 21 epochs (early-stopped, best at epoch 16, valid loss 0.1643, char accuracy 0.965)
-\subsection{Fine-tuning mBART50}
-
-mBART was fine-tuned only 3 epochs (best eval loss 0.2024 at epoch 2). 
-
-
-
-For tokenization and evaluation we used the corresponding publicly available scripts from the UA-GEC git \citep{uagec-2023}.
+The hardware used for both training and fine-tuning was 16 GB RTX 4060 Ti, using
+the \texttt{gec+fluency} training split. The hyperparameters are summarized in Table~\ref{tab:hyperparams}.
 
 \begin{table}[h]
 \centering
@@ -246,14 +241,47 @@ Decoding          & greedy & beam (5) \\
 \label{tab:hyperparams}
 \end{table}
 
+
+\subsection{Training the LSTM}
+
+Both the encoder and the decoder use a single LSTM layer with a hidden size of 256 and 64-dimensional character embeddings. We used Adam optimizer with a learning rate of $10^{-3}$ and a batch size of 48.
+
+The LSTM was trained with early stopping (patience of 5 epochs) and evaluated on a held-out validation set. After each epoch we tracked the validation loss. Training halted after 21 epochs, because the last five epochs following epoch 16 showed no improvement. We restored the checkpoint with the lowest validation loss of 0.1643 at epoch 16. Character accuracy for that epoch was 0.965. This high number is explained by little character-difference between the source and the target sentences in UA-GEC.
+
+
+\subsection{Fine-tuning mBART50}
+
+mBART was fine-tuned only 3 epochs, with the best evaluation loss of 0.2024 at epoch 2. We perform full fine-tuning, so all $\sim$610M parameters are updated. Full fine-tuning requires a 32-batch, storing of all activations and fp32, which is too much for a 16 GB hardware. To conduct full fine-tuning and avoid running out of memory, we used the techniques provided by HuggingFace:  \emph{gradient accumulation}, \emph{gradient checkpointing} and  \emph{bf16 mixed precision} \citep{huggingface-gpu-optimization}. Activation memory depends on the batch size, so by reducing the batch size from 32 to 4 we save up a handsome amount of GB. The model processes 8 batches of 4, accumulating the gradients until the final batch, so we end up with a 32-batch. 
+ \emph{Gradient checkpointing} enables the model to store only few activations, without intermediate ones. Instead, the latter ones are recomputed during the backward pass. \emph{bf16 mixed precision} shrinks some of the default 32-bit float to a 16-bit float \citep{huggingface-gpu-optimization}.
+
+
+ 
+
+\section{Evaluation}
+To evaluate the performance of the LSTM and the fine-tuned mBART50, we reuse two publicly available scripts from the UA-GEC repository, namely tokenization and evaluation \citep{uagec-2023}. The evaluation script is based on ERRANT \citep{bryant-etal-2017-automatic}. ERRANT requires tokenized input, so each model's output is first tokenized with Stanza. Next, ERRANT compares the originally annotated sentences from \texttt{valid.m2} with each model's predictions and produces precision, recall and F\textsubscript{0.5} metrics.
+
+There are two ways ERRANT scores a model. The main difference between them is how they evaluate the suggested fix. \textit{Span-based detection} counts a predicted edit as correct whenever it overlaps with the actual error, regardless of the proposed correction. With \textit{Span-based correction} the predicted edit must not only locate the error but also match the gold replacement exactly \citep{bryant-etal-2017-automatic}. For instance, if the gold edit is \texttt{\textcyrillic{гарний} $\rightarrow$ \textcyrillic{гарна}} and the model predicts \texttt{\textcyrillic{гарний} $\rightarrow$ \textcyrillic{гарне}}, it is counted only under detection, since the location is right but the correction is wrong. 
+
+We also conduct an error-type analysis to see what kind of errors the models miss. The category labels are not produced by ERRANT, whose classifier is built for English, but taken from the gold UA-GEC annotations in \texttt{valid.m2}. For each gold edit we check whether the model produced an edit with the same span and correction and group these matches by category to calculate recall for each category.
+
+
+
 \section{Results}
+\label{sec:results}
+
+ERRANT evaluation on span-based correction and span-based detection is shown in Table~\ref{tab:results}. The fine-tuned mBART50 model outperforms the character-level LSTM across every metric. Both models have precision roughly twice as much as recall. This suggests that when a model proposes a correction, it is usually right, but it carefully fixes only a small
+part of all errors. Recall is therefore the main weakness of both models: even mBART50 reaches a detection recall of only 0.41, meaning that 59\% of errors are never located.  Since F\textsubscript{0.5} gives precision more weight than recall, it rewards this careful behaviour, so the scores look better than the actual coverage.
+
+Detection scores are consistently higher than correction scores for both models, so both models are better at noticing that something is wrong than at making the exact right fix.
+
+
 
 \begin{table}[h]
 \centering
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{lccc}
 \hline
-\textbf{Model} & \textbf{Precision} & \textbf{Recall} & \textbf{F0.5} \\
+\textbf{Model} & \textbf{Precision} & \textbf{Recall} & \textbf{F\textsubscript{0.5}} \\
 \hline
 \multicolumn{4}{l}{\textit{Span-based correction}} \\
 LSTM (char-level) & 0.4805 & 0.2600 & 0.4108 \\
@@ -268,9 +296,49 @@ mBART50 (fine-tuned) & 0.7891 & 0.4110 & \textbf{0.6665} \\
 \label{tab:results}
 \end{table}
 
-The vocabularies of both models differ drastically: 326 tokens VS ~250,000 tokens in favor of mBART50). 
 
 
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}lrrr@{}}
+\hline
+\textbf{Error type} & \textbf{N} & \textbf{LSTM} & \textbf{mBART} \\
+\hline
+Punctuation   &  639 & 0.455 & 0.669 \\
+Spelling      &  415 & 0.318 & 0.320 \\
+F/PoorFlow    &  138 & 0.029 & 0.127 \\
+F/Style       &  127 & 0.016 & 0.134 \\
+G/Case        &   90 & 0.022 & 0.122 \\
+F/Calque      &   80 & 0.037 & 0.091 \\
+G/Structure   &   46 & 0.022 & 0.083 \\
+F/Repetition  &   35 & 0.000 & 0.118 \\
+F/Collocation &   21 & 0.048 & 0.174 \\
+G/Prep        &   18 & 0.000 & 0.185 \\
+G/Number      &   15 & 0.000 & 0.143 \\
+G/Gender      &   13 & 0.000 & 0.278 \\
+\hline
+\textbf{Overall} & 1708 & \textbf{0.260} & \textbf{0.374} \\
+\hline
+\end{tabular}
+\caption{Per-category recall for the most frequent error types on the UA-GEC validation set. Overall covers all categories; only the most frequent are listed.}
+\label{tab:error-analysis}
+\end{table}
+
+According to Table~\ref{tab:error-analysis} models mostly correct local errors. The LSTM does well on
+punctuation (recall 0.46) and spelling (0.32), but rarely corrects grammar or fluency errors: its recall is only 0.02 for case and 0.00 for number and gender. mBART50 is better in every category but follows the same pattern, namely it is strongest on punctuation (0.67) and spelling (0.32) and weak on case (0.12) and calque (0.09). Both models therefore work mainly as punctuation and spelling correctors, while the harder morphological errors, which are characteristic of Ukrainian, remain mostly uncorrected.
+
+This distribution mirrors the dataset itself: in UA-GEC, punctuation and spelling make up roughly 43\% and 19\% of all errors, respectively \citep{syvokon-etal-2023-ua}. As a result, the two categories both models handle best account for about 62\% of all errors, which partly explains why the F\textsubscript{0.5} scores look favourable despite the weak correction of morphological errors.
+
+\section{Limitations}
+
+
+The two models also differ in many ways at once, so the F\textsubscript{0.5} gap between them cannot be traced to a single reason. mBART50 is much larger ($\sim$610M vs. $\sim$4M parameters), pretrained on 50 languages instead of trained from scratch, uses subword instead of character tokenization, and decodes with beam search instead of greedy decoding.
+
+All experiments ran on a single 16 GB RTX 4060 Ti. Because of this limited memory, mBART50 was fine-tuned for only two epochs with a small batch size, and the LSTM used a single, lightly tuned configuration. Neither model was trained to its full potential, and both, mBART50 in particular, would likely improve with more compute and longer training. We report a single training run per model, without multiple seeds or significance tests.
+
+Finally, as noted in Section~\ref{sec:results}, punctuation and spelling dominate UA-GEC, so the F\textsubscript{0.5} is largely driven by these frequent and comparatively easy categories. Therefore the more difficult errors are still essentially unsolved.
 
 \nocite{*}
 \bibliographystyle{acl_natbib}
