@@ -2,6 +2,18 @@
 mBART has its own SentencePiece sub-word tokenizer, so we do not reuse GECVocabulary here. It is like a
 translation task, erroneous sentences in Ukrainian are "translated" to correct ones.
 
+For efficient training on a single GPU we use HuggingFace techniques: gradient accumulation,
+gradient checkpointing and bf16 mixed precision.
+
+    gradient accumulation: process the batch in small chunks and add up their gradients before updating the weights.
+    Instead of one step of 32, the Trainer does 8 smaller steps of 4. It computes gradients after each step, accumulates
+    the weights and only the final 8th step it runs the optimizer and clears the gradients.
+
+    gradient checkpointing: instead of saving all activations for every layer, only a few checkpoints are saved
+    and the activations in between are thrown away completely. During the backward pass (for a discarded activation),
+    it is recomputed from the nearest checkpoint.
+
+
 """
 
 import argparse
@@ -32,9 +44,10 @@ TGT_VALID = "./gec-data/valid.tgt.txt"
 MAX_SOURCE_LEN = 256
 MAX_TARGET_LEN = 256
 
-# Memory budget is the whole story here: mBART-large is ~610M parameters, far
-# heavier than the LSTM.
-PER_DEVICE_BATCH = 4
+# mBART-large is ~610M parameters, far heavier than the LSTM
+#
+# Gradient accumulation
+PER_DEVICE_BATCH = 4 # only 4 sentences fit at once
 GRAD_ACCUM_STEPS = 8  # effective batch = 4 * 8 = 32
 NUM_EPOCHS       = 3
 
@@ -150,7 +163,7 @@ def main():
     train_src, train_tgt = load_pairs(SRC_TRAIN, TGT_TRAIN, drop_markers=True)
     valid_src, valid_tgt = load_pairs(SRC_VALID, TGT_VALID, drop_markers=True)
 
-    # In smoke mode keep only a small slice so the whole loop finishes in minutes.
+    # In smoke mode keep only a small slice so the whole loop finishes in minutes
     if cli.smoke:
         train_src, train_tgt = train_src[:SMOKE_PAIRS], train_tgt[:SMOKE_PAIRS]
         valid_src, valid_tgt = valid_src[:SMOKE_PAIRS], valid_tgt[:SMOKE_PAIRS]
@@ -198,7 +211,7 @@ def main():
 
     trainer.train()
 
-    # Save the best model + tokenizer
+
     trainer.save_model(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
     print(f"Saved fine-tuned model to {OUTPUT_DIR}/")
@@ -210,7 +223,7 @@ def main():
 
 
 def write_training_report(trainer, num_epochs):
-    """Summarise train/eval loss per epoch from the trainer's log history."""
+    # Summarise train/eval loss per epoch from the trainer's log history
 
     train_by_epoch = {}   # epoch -> list of step train losses
     eval_by_epoch = {}    # epoch -> eval loss
